@@ -1,0 +1,9 @@
+nnunet==1.7.1
+dicom2nifti
+nibabel
+numpy
+scipy
+scikit-image
+tqdm
+SimpleITK
+seaborn
