@@ -15,6 +15,7 @@ from tqdm import tqdm
 
 from nnunet.inference.predict import predict_cases
 
+
 def parse_args():
     p = argparse.ArgumentParser(description="ADPKD nnU-Net inference")
     p.add_argument(
