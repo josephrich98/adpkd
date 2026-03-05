@@ -1,3 +1,5 @@
 crisp
 model_checkpoint
 tmp_batch_inference
+segmentations
+**__pycache__**
