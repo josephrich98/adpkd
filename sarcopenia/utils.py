@@ -16,7 +16,7 @@ def visualize_segmentations(
     image_file,
     segmentation_files,
     output_dir,
-    case_id,
+    case_id="case",
     overwrite=False,
     duration=0.1,
     loop=0,
@@ -40,6 +40,9 @@ def visualize_segmentations(
         raise ValueError(f"Unsupported plane: {plane}")
     img = img_nii.get_fdata()
     img = np.rot90(img, axes=(0, 1))
+
+    if isinstance(segmentation_files, (str, Path)):
+        segmentation_files = [segmentation_files]
 
     masks = []
     for seg_path in segmentation_files:

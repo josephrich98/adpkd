@@ -2,7 +2,6 @@ import os
 import subprocess
 from pathlib import Path
 from tqdm import tqdm
-# ensure this imports
 from utils import visualize_segmentations
 
 # psoas
