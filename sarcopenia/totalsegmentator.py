@@ -46,8 +46,8 @@ def run_totalsegmentator(task, image_file, selected_segmentations, duration=0.1,
         visualize_segmentations(
             image_file=image_file,
             segmentation_files=existing_segmentation_paths(totalsegmentator_dir, selected_segmentations),
-            output_dir=totalsegmentator_dir / f"visualization_{task}" / plane,
-            case_id=caseID,
+            output_dir=totalsegmentator_dir / "visualization" / plane,
+            case_id=f"{patientID}___{caseID}",
             duration=duration,
             loop=loop,
             plane=plane,
@@ -58,9 +58,12 @@ for patientID in tqdm(sorted(os.listdir(CRISP_ROOT)), desc="Processing patients"
     if not os.path.isdir(patient_dir):
         continue
     for caseID in sorted(os.listdir(patient_dir)):
+        case_dir = os.path.join(CRISP_ROOT, patientID, caseID)
+        if not os.path.isdir(case_dir):
+            continue
+
         # get the file that ends in .nii.gz
         image_file = None
-        case_dir = os.path.join(CRISP_ROOT, patientID, caseID)
         for filename in os.listdir(case_dir):
             if filename.endswith(".nii.gz"):
                 image_file = os.path.join(case_dir, filename)

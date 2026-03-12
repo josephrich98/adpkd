@@ -111,6 +111,6 @@ def visualize_segmentations(
         plt.savefig(out_path, dpi=120)
         plt.close(fig)
     
-    gif_file = output_dir / f"{case_id}_visualization.gif"
+    gif_file = output_dir / f"{case_id}_visualization_{plane}.gif"
     if not gif_file.exists() or overwrite:
         make_gif(png_files, gif_file, duration=duration, loop=loop)
