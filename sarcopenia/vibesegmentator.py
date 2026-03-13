@@ -5,8 +5,8 @@ from tqdm import tqdm
 from utils import visualize_segmentations
 
 # sacrum
-# skeletal muscle
-# visceral fat
+# muscle
+# inner fat
 # subcutaneous fat
 
 CRISP_ROOT = Path("/mnt/gpussd2/jrich/Desktop/ADPKD/crisp/T2_HASTE")  # Get data from here
@@ -22,7 +22,7 @@ def existing_segmentation_paths(seg_dir, segmentation_names):
         if (Path(seg_dir) / f"{name}.nii.gz").exists()
     ]
 
-def run_totalsegmentator(task, image_file, selected_segmentations):
+def run_totalsegmentator(task, image_file, selected_segmentations, duration=0.1, loop=0):
     totalsegmentator_dir = SEGMENTATION_OUTPUT_DIR / "totalsegmentator" / patientID / caseID / task
     totalsegmentator_dir.mkdir(parents=True, exist_ok=True)
 
@@ -40,6 +40,17 @@ def run_totalsegmentator(task, image_file, selected_segmentations):
     else:
         print(f"Running TotalSegmentator {task} for caseID {caseID}...")
         subprocess.run(totalsegmentator_command, check=True)
+
+    for plane in ["coronal", "axial"]:
+        visualize_segmentations(
+            image_file=image_file,
+            segmentation_files=existing_segmentation_paths(totalsegmentator_dir, selected_segmentations),
+            output_dir=totalsegmentator_dir / "visualization" / plane,
+            case_id=f"{patientID}___{caseID}",
+            duration=duration,
+            loop=loop,
+            plane=plane,
+        )
 
 for patientID in tqdm(sorted(os.listdir(CRISP_ROOT)), desc="Processing patients"):
     patient_dir = os.path.join(CRISP_ROOT, patientID)
@@ -61,22 +72,5 @@ for patientID in tqdm(sorted(os.listdir(CRISP_ROOT)), desc="Processing patients"
             continue
 
         # * run TotalSegmentator
-        run_totalsegmentator(task="total_mr", image_file=image_file, selected_segmentations=selected_segmentations_total_mr)
-        run_totalsegmentator(task="tissue_types_mr", image_file=image_file, selected_segmentations=selected_segmentations_tissue_types_mr)
-        
-        segmentation_files = None
-        totalsegmentator_base_dir = SEGMENTATION_OUTPUT_DIR / "totalsegmentator" / patientID / caseID
-        segmentation_files = existing_segmentation_paths(totalsegmentator_base_dir / "total_mr", selected_segmentations_total_mr)
-        segmentation_files += existing_segmentation_paths(totalsegmentator_base_dir / "tissue_types_mr", selected_segmentations_tissue_types_mr)
-
-        visualize_segmentations(
-            image_file=image_file,
-            segmentation_files=segmentation_files,
-            output_dir=totalsegmentator_base_dir / "visualization",
-            case_id=f"{patientID}___{caseID}",
-            duration=0.1,
-            loop=0,
-        )
-
-        break
-    break
+        run_totalsegmentator(task="total_mr", image_file=image_file, selected_segmentations=selected_segmentations_total_mr, duration=0.1, loop=0)
+        run_totalsegmentator(task="tissue_types_mr", image_file=image_file, selected_segmentations=selected_segmentations_tissue_types_mr, duration=0.1, loop=0)
