@@ -43,11 +43,15 @@ def visualize_segmentations(
     overwrite=False,
     duration=0.1,
     loop=0,
+    label_dict=None,  # NEW: for integer mask segmentations
 ):
-    """Create per-slice overlays for a set of segmentation masks."""
-    if not segmentation_files:
-        print(f"No segmentation files to visualize for {case_id}.")
-        return
+    """
+    Create per-slice overlays for segmentation masks.
+
+    Supports two formats:
+    1. Multiple binary masks (TotalSegmentator style)
+    2. Single integer mask with label_dict mapping names --> int labels (VIBESegmentator style)
+    """
 
     image_file = Path(image_file)
     output_dir = Path(output_dir)
@@ -57,44 +61,70 @@ def visualize_segmentations(
     img = img_nii.get_fdata()
     img = np.rot90(img, axes=(0, 1))
 
-    if isinstance(segmentation_files, (str, Path)):
-        segmentation_files = [segmentation_files]
-
     masks = []
-    for seg_path in segmentation_files:
-        seg_path = Path(seg_path)
-        if not seg_path.exists():
-            continue
-        mask_nii = nib.load(str(seg_path))
+
+    # -----------------------------
+    # CASE 1: Integer mask file
+    # -----------------------------
+    if label_dict is not None:  #* vibesegmentator
+
+        mask_nii = nib.load(str(segmentation_files))
         mask = mask_nii.get_fdata()
         mask = np.rot90(mask, axes=(0, 1))
-        masks.append((seg_path.stem.replace(".nii", ""), mask > 0))
+
+        for name, label in label_dict.items():
+            masks.append((name, mask == label))
+
+    # -----------------------------
+    # CASE 2: Multiple binary masks
+    # -----------------------------
+    else:  #* totalsegmentator
+
+        if isinstance(segmentation_files, (str, Path)):
+            segmentation_files = [segmentation_files]
+
+        for seg_path in segmentation_files:
+            seg_path = Path(seg_path)
+            if not seg_path.exists():
+                continue
+
+            mask_nii = nib.load(str(seg_path))
+            mask = mask_nii.get_fdata()
+            mask = np.rot90(mask, axes=(0, 1))
+
+            masks.append((seg_path.stem.replace(".nii", ""), mask > 0))
 
     if not masks:
-        print(f"All segmentation files were missing for {case_id}.")
+        print(f"No segmentation masks found for {case_id}")
         return
 
-    # Aggregate all structures into one visualization mask.
+    # -----------------------------
+    # Color setup
+    # -----------------------------
     colors = np.array([
-        [255, 0, 0],      # red
-        [0, 255, 0],      # green
-        [0, 0, 255],      # blue
-        [255, 255, 0],    # yellow
-        [255, 0, 255],    # magenta
-        [0, 255, 255],    # cyan
+        [255, 0, 0],
+        [0, 255, 0],
+        [0, 0, 255],
+        [255, 255, 0],
+        [255, 0, 255],
+        [0, 255, 255],
     ]) / 255.0
-    
+
     mask_name_to_color = {}
+
     combined_mask = np.zeros_like(masks[0][1], dtype=int)
+
     for i, (mask_name, mask) in enumerate(masks, start=1):
-        combined_mask[mask > 0] = i  # Assign a unique integer to each structure for coloring    
-        mask_name_to_color[mask_name] = colors[(i-1) % len(colors)]
+        combined_mask[mask > 0] = i
+        mask_name_to_color[mask_name] = colors[(i - 1) % len(colors)]
 
     color_legend_file = output_dir / f"{case_id}_legend.png"
     save_color_legend(mask_name_to_color, color_legend_file)
 
     png_files = []
+
     for z in tqdm(range(img.shape[2]), desc=f"Visualizing {case_id}"):
+
         base = img[:, :, z]
         slice_mask = combined_mask[:, :, z]
 
@@ -109,26 +139,25 @@ def visualize_segmentations(
         if out_path.exists() and not overwrite:
             continue
 
-        # normalize image for RGB
         base_norm = (base - base.min()) / (base.max() - base.min() + 1e-8)
-        rgb = np.stack([base_norm]*3, axis=-1)
+        rgb = np.stack([base_norm] * 3, axis=-1)
 
         alpha = 0.35
 
-        # overlay masks
         for label in np.unique(slice_mask):
+
             if label == 0:
                 continue
 
             mask_region = slice_mask == label
-            color = colors[(label-1) % len(colors)]
+            color = colors[(label - 1) % len(colors)]
 
             rgb[mask_region] = (
-                (1-alpha)*rgb[mask_region] +
-                alpha*color
+                (1 - alpha) * rgb[mask_region] +
+                alpha * color
             )
 
-        fig, axes = plt.subplots(1,2,figsize=(12,6))
+        fig, axes = plt.subplots(1, 2, figsize=(12, 6))
 
         axes[0].imshow(base, cmap="gray")
         axes[0].axis("off")
@@ -139,7 +168,8 @@ def visualize_segmentations(
         plt.tight_layout()
         plt.savefig(out_path, dpi=120)
         plt.close()
-    
+
     gif_file = output_dir / f"{case_id}_visualization.gif"
+
     if not gif_file.exists() or overwrite:
         make_gif(png_files, gif_file, duration=duration, loop=loop)

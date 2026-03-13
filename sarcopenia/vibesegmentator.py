@@ -11,9 +11,15 @@ from utils import visualize_segmentations
 
 CRISP_ROOT = Path("/mnt/gpussd2/jrich/Desktop/ADPKD/crisp/T2_HASTE")  # Get data from here
 SEGMENTATION_OUTPUT_DIR = Path("/mnt/gpussd2/jrich/Desktop/ADPKD/segmentations")  # Save segmentations here
+VIBESegmentator = "/mnt/gpussd2/jrich/Desktop/VIBESegmentator"  # Path to VIBESegmentator repository
 
-selected_segmentations_total_mr = ["sacrum"]
-selected_segmentations_tissue_types_mr = ["subcutaneous_fat", "torso_fat", "skeletal_muscle"]
+selected_segmentations = {
+    "sacrum": 23,
+    "subcutaneous_fat": 65,
+    "muscle": 66,
+    "inner_fat": 67,
+
+}
 
 def existing_segmentation_paths(seg_dir, segmentation_names):
     return [
@@ -22,35 +28,34 @@ def existing_segmentation_paths(seg_dir, segmentation_names):
         if (Path(seg_dir) / f"{name}.nii.gz").exists()
     ]
 
-def run_totalsegmentator(task, image_file, selected_segmentations, duration=0.1, loop=0):
-    totalsegmentator_dir = SEGMENTATION_OUTPUT_DIR / "totalsegmentator" / patientID / caseID / task
-    totalsegmentator_dir.mkdir(parents=True, exist_ok=True)
+def run_vibesegmentator(image_file):
+    vibesegmentator_dir = SEGMENTATION_OUTPUT_DIR / "vibesegmentator" / patientID / caseID
+    vibesegmentator_dir.mkdir(parents=True, exist_ok=True)
 
-    totalsegmentator_command = [
-        "TotalSegmentator",
-        "-i",
+    vibesegmentator_out_nii_filename = os.path.basename(image_file).replace(".nii.gz", "_vibesegmentator_output.nii.gz")
+    vibesegmentator_out_nii = vibesegmentator_dir / "vibesegmentator_output.nii.gz"
+
+    VIBESegmentator_script = os.path.join(VIBESegmentator, "run_VIBESegmentator.py")
+    vibesegmentator_command = [
+        "python",
+        VIBESegmentator_script,
+        "--img",
         image_file,
-        "-o",
-        str(totalsegmentator_dir),
-        "--task",
-        task,
+        "--out_path",
+        str(vibesegmentator_out_nii),
+        "--ddevice",
+        "cuda",
+        "--dataset_id",
+        "100",
+        "--fill_holes"
     ]
-    if all((totalsegmentator_dir / f"{seg_name}.nii.gz").exists() for seg_name in selected_segmentations):
-        print(f"Predicted {task} segmentation files already exist for caseID {caseID}. Skipping TotalSegmentator.")
-    else:
-        print(f"Running TotalSegmentator {task} for caseID {caseID}...")
-        subprocess.run(totalsegmentator_command, check=True)
 
-    for plane in ["coronal", "axial"]:
-        visualize_segmentations(
-            image_file=image_file,
-            segmentation_files=existing_segmentation_paths(totalsegmentator_dir, selected_segmentations),
-            output_dir=totalsegmentator_dir / "visualization" / plane,
-            case_id=f"{patientID}___{caseID}",
-            duration=duration,
-            loop=loop,
-            plane=plane,
-        )
+    if os.path.exists(vibesegmentator_out_nii_filename):
+        print(f"Predicted segmentation file already exists for caseID {caseID}. Skipping VIBESegmentator.")
+    else:
+        print(f"Running VIBESegmentator for caseID {caseID}...")
+        print(" ".join(vibesegmentator_command))
+        subprocess.run(vibesegmentator_command, check=True)
 
 for patientID in tqdm(sorted(os.listdir(CRISP_ROOT)), desc="Processing patients"):
     patient_dir = os.path.join(CRISP_ROOT, patientID)
@@ -71,6 +76,25 @@ for patientID in tqdm(sorted(os.listdir(CRISP_ROOT)), desc="Processing patients"
             print(f"No NIfTI file found for caseID {caseID} in {case_dir}. Skipping.")
             continue
 
-        # * run TotalSegmentator
-        run_totalsegmentator(task="total_mr", image_file=image_file, selected_segmentations=selected_segmentations_total_mr, duration=0.1, loop=0)
-        run_totalsegmentator(task="tissue_types_mr", image_file=image_file, selected_segmentations=selected_segmentations_tissue_types_mr, duration=0.1, loop=0)
+        # * run VIBESegmentator
+        run_vibesegmentator(image_file=image_file)
+
+        segmentation_files = None
+        vibesegmentator_base_dir = SEGMENTATION_OUTPUT_DIR / "vibesegmentator" / patientID / caseID
+        
+        vibesegmentator_dir = SEGMENTATION_OUTPUT_DIR / "vibesegmentator" / patientID / caseID
+        vibesegmentator_out_nii_filename = os.path.basename(image_file).replace(".nii.gz", "_vibesegmentator_output.nii.gz")
+        vibesegmentator_out_nii = vibesegmentator_dir / "vibesegmentator_output.nii.gz"
+
+        visualize_segmentations(
+            image_file=image_file,
+            segmentation_files=vibesegmentator_out_nii,
+            output_dir=vibesegmentator_base_dir / "visualization",
+            case_id=f"{patientID}___{caseID}",
+            duration=0.1,
+            loop=0,
+            label_dict=selected_segmentations,
+        )
+
+        break
+    break
